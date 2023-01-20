@@ -28,10 +28,6 @@ set "common_test_suites=%JS_SUITES% %NATIVE_SUITES%&set build_addons=1&set build
 set config=Release
 set target=Build
 set target_arch=x64
-set host_arch=%PROCESSOR_ARCHITECTURE%
-if _%PROCESSOR_ARCHITEW6432%_==_AMD64_ set host_arch=amd64
-if _%host_arch%_==_AMD64_ set host_arch=amd64
-if _%host_arch%_==__ set host_arch=x64
 set ltcg=
 set target_env=
 set noprojgen=
@@ -87,11 +83,6 @@ if /i "%1"=="ia32"          set target_arch=x86&goto arg-ok
 if /i "%1"=="x86"           set target_arch=x86&goto arg-ok
 if /i "%1"=="x64"           set target_arch=x64&goto arg-ok
 if /i "%1"=="arm64"         set target_arch=arm64&goto arg-ok
-if /i "%1"=="ia32-host"     set host_arch=x86&goto arg-ok
-if /i "%1"=="x86-host"      set host_arch=x86&goto arg-ok
-if /i "%1"=="x64-host"      set host_arch=x64&goto arg-ok
-if /i "%1"=="amd64-host"    set host_arch=amd64&goto arg-ok
-if /i "%1"=="arm64-host"    set host_arch=arm64&goto arg-ok
 if /i "%1"=="vs2019"        set target_env=vs2019&goto arg-ok
 if /i "%1"=="vs2022"        set target_env=vs2022&goto arg-ok
 if /i "%1"=="noprojgen"     set noprojgen=1&goto arg-ok
@@ -215,7 +206,7 @@ if defined debug_nghttp2    set configure_flags=%configure_flags% --debug-nghttp
 if defined openssl_no_asm   set configure_flags=%configure_flags% --openssl-no-asm
 if defined no_shared_roheap set configure_flags=%configure_flags% --disable-shared-readonly-heap
 if defined DEBUG_HELPER     set configure_flags=%configure_flags% --verbose
-if "%target_arch%"=="x86" if "%host_arch%"=="amd64" set configure_flags=%configure_flags% --no-cross-compiling
+if "%target_arch%"=="x86" if "%PROCESSOR_ARCHITECTURE%"=="AMD64" set configure_flags=%configure_flags% --no-cross-compiling
 
 if not exist "%~dp0deps\icu" goto no-depsicu
 if "%target%"=="Clean" echo deleting %~dp0deps\icu
@@ -248,12 +239,15 @@ if defined noprojgen if defined nobuild goto :after-build
 
 @rem Set environment for msbuild
 
-@rem usually vcvarsall takes an argument: host + '_' + target unless both host and target are the same
-if %target_arch%==%host_arch% (
-  set vcvarsall_arg=%target_arch% 
-) else (
-  set vcvarsall_arg=%host_arch%_%target_arch%
-)
+set msvs_host_arch=x86
+if _%PROCESSOR_ARCHITECTURE%_==_AMD64_ set msvs_host_arch=amd64
+if _%PROCESSOR_ARCHITEW6432%_==_AMD64_ set msvs_host_arch=amd64
+@rem usually vcvarsall takes an argument: host + '_' + target
+set vcvarsall_arg=%msvs_host_arch%_%target_arch%
+@rem unless both host and target are x64
+if %target_arch%==x64 if %msvs_host_arch%==amd64 set vcvarsall_arg=amd64
+@rem also if both are x86
+if %target_arch%==x86 if %msvs_host_arch%==x86 set vcvarsall_arg=x86
 
 @rem Look for Visual Studio 2022
 :vs-set-2022
@@ -421,7 +415,7 @@ if errorlevel 1 echo Failed to sign exe, got error code %errorlevel%&goto exit
 if not defined licensertf goto stage_package
 
 set "use_x64_node_exe=false"
-if "%target_arch%"=="arm64" if "%host_arch%"=="amd64" set "use_x64_node_exe=true"
+if "%target_arch%"=="arm64" if "%PROCESSOR_ARCHITECTURE%"=="AMD64" set "use_x64_node_exe=true"
 set "x64_node_exe=temp-vcbuild\node-x64-cross-compiling.exe"
 if "%use_x64_node_exe%"=="true" (
   echo Cross-compilation to ARM64 detected. We'll use the x64 Node executable for license2rtf.
